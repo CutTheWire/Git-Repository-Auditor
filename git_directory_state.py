@@ -13,33 +13,27 @@ BRANCH = os.environ.get('BRANCH_NAME')
 SHA = os.environ.get('COMMIT_SHA')
 
 def print_tree(path, prefix="", is_last=True):
-    """
-    주어진 경로의 디렉토리 구조를 마크다운 형식으로 출력합니다.
-    
-    Args:
-        path (str): 탐색할 디렉토리 경로
-        prefix (str): 현재 노드의 들여쓰기 접두사
-        is_last (bool): 현재 노드가 마지막 노드인지 여부
-    """
-    contents = os.listdir(path)
-    
-    for i, item in enumerate(contents):
-        item_path = os.path.join(path, item)
-        
-        # 폴더인 경우
-        if os.path.isdir(item_path):
-            print(f"{prefix}{' ┗ ' if is_last else ' ┣ '} 📂{item}/")
-            
-            # 재귀적으로 하위 폴더 출력
-            if is_last:
-                print_tree(item_path, f"{prefix}  ", True)
-            else:
-                print_tree(item_path, f"{prefix}  ", False)
-        
-        # 파일인 경우
+    if os.path.isdir(path):
+        # 숨김 폴더 제외
+        if os.path.basename(path).startswith('.'):
+            return
+        # 최상위 폴더
+        if prefix == "":
+            print(f"{prefix}📦 {os.path.basename(path)}")
         else:
-            print(f"{prefix}{' ┗ ' if is_last and i == len(contents) - 1 else ' ┣ '} 📜{item}")
-
+            # 폴더
+            print(f"{prefix}{' ┗ ' if is_last else ' ┣ '}📂 {os.path.basename(path)}")
+        prefix += "   " if is_last else " ┃ "
+        items = os.listdir(path)
+        items.sort()  # 정렬하여 출력
+        for index, item in enumerate(items):
+            print_tree(os.path.join(path, item), prefix, index == len(items) - 1)
+    else:
+        # 숨김 파일 제외
+        if os.path.basename(path).startswith('.'):
+            return
+        # 파일
+        print(f"{prefix}📜 {os.path.basename(path)}")
 
 
 def print_changes(repo_path, commit_hash):
