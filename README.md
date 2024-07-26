@@ -48,4 +48,7 @@ Linux/macOS 사용자의 경우 `source .venv/bin/activate`를 실행하세요.
 source .venv/bin/activate
 ```
 
+### 4. .env 설정
+
+
 이제 프로젝트를 사용할 준비가 되었습니다. 즐겁게 사용하세요!

@@ -1,15 +1,46 @@
 import os
+import dotenv
 import shutil
+import stat
 from git import Repo
 
-def print_tree(path, prefix=""):
-    if os.path.isdir(path):
-        print(prefix + os.path.basename(path) + "/")
-        prefix += " ┣ "
-        for item in os.listdir(path):
-            print_tree(os.path.join(path, item), prefix)
-    else:
-        print(prefix + "📜" + os.path.basename(path))
+# .env 파일 로드
+dotenv.load_dotenv()
+
+# 환경 변수에서 값 가져오기
+URL = os.environ.get('REPO_URL')
+BRANCH = os.environ.get('BRANCH_NAME')
+SHA = os.environ.get('COMMIT_SHA')
+
+def print_tree(path, prefix="", is_last=True):
+    """
+    주어진 경로의 디렉토리 구조를 마크다운 형식으로 출력합니다.
+    
+    Args:
+        path (str): 탐색할 디렉토리 경로
+        prefix (str): 현재 노드의 들여쓰기 접두사
+        is_last (bool): 현재 노드가 마지막 노드인지 여부
+    """
+    contents = os.listdir(path)
+    
+    for i, item in enumerate(contents):
+        item_path = os.path.join(path, item)
+        
+        # 폴더인 경우
+        if os.path.isdir(item_path):
+            print(f"{prefix}{' ┗ ' if is_last else ' ┣ '} 📂{item}/")
+            
+            # 재귀적으로 하위 폴더 출력
+            if is_last:
+                print_tree(item_path, f"{prefix}  ", True)
+            else:
+                print_tree(item_path, f"{prefix}  ", False)
+        
+        # 파일인 경우
+        else:
+            print(f"{prefix}{' ┗ ' if is_last and i == len(contents) - 1 else ' ┣ '} 📜{item}")
+
+
 
 def print_changes(repo_path, commit_hash):
     repo = Repo(repo_path)
@@ -28,23 +59,43 @@ def print_changes(repo_path, commit_hash):
         elif commit.stats.files[changed_file]['insertions'] > 0:
             print(f"✅ {changed_file} (추가)")
 
-# 사용 예시
-repo_url = 'https://github.com/TreeNut-KR/Chatbot_Pytorch.git'
-branch_name = 'dataset'
-commit_hash = 'ecee9ec'
+def handle_remove_readonly(func, path, excinfo):
+    # 파일 권한을 변경하여 읽기 전용을 해제하고 다시 시도
+    os.chmod(path, stat.S_IWRITE)
+    func(path)  # 삭제를 다시 시도
 
-# 기존 디렉토리 삭제 (수동으로 .git 폴더 삭제)
-if os.path.exists('Checking_folder'):
-    shutil.rmtree('Checking_folder', ignore_errors=True)  # ignore_errors=True로 설정하여 오류 무시
+if __name__ == "__main__":
+    # .env 파일 로드
+    dotenv.load_dotenv()
 
-# 리포지토리 클론
-repo = Repo.clone_from(repo_url, 'Checking_folder')
+    # 환경 변수에서 값 가져오기
+    URL = os.environ.get('REPO_URL')
+    BRANCH = os.environ.get('BRANCH_NAME')
+    SHA = os.environ.get('COMMIT_SHA')
 
-# 브랜치 전환
-repo.git.checkout(branch_name)
+    parent_dir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
+    folder_name = 'Checking_folder'
+    folder_path = os.path.join(parent_dir, folder_name)
 
-# 변경 내역 출력
-print_changes('Checking_folder', commit_hash)
+    # 기존 폴더 삭제
+    if os.path.exists(folder_path):
+        try:
+            shutil.rmtree(folder_path, onerror=handle_remove_readonly)
+        except Exception as e:
+            print(f"폴더 삭제 중 오류 발생: {e}")
 
-# 불러온 Chatbot_Pytorch 디렉토리 삭제
-shutil.rmtree('Checking_folder', ignore_errors=True)  # 오류 무시
+    # 디렉토리 존재 여부 확인
+    if os.path.exists(folder_path):
+        print("오류: 'Checking_folder'가 여전히 존재합니다. 수동으로 삭제하십시오.")
+    else:
+        # 리포지토리 클론 및 작업
+        try:
+            repo = Repo.clone_from(URL, folder_path)  # 상위 디렉토리에 클론할 디렉토리
+            repo.git.checkout(BRANCH)  # 브랜치 전환
+            print_changes(folder_path, SHA)  # 변경 내역 출력
+        except Exception as e:
+            print(f"오류 발생: {e}")
+
+    # 불러온 Checking_folder 디렉토리 삭제
+    if os.path.exists(folder_path):
+        shutil.rmtree(folder_path, onerror=handle_remove_readonly)
