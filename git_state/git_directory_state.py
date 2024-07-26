@@ -4,39 +4,31 @@ import shutil
 import stat
 from git import Repo
 
-# .env 파일 로드
-dotenv.load_dotenv()
-
-# 환경 변수에서 값 가져오기
-URL = os.environ.get('REPO_URL')
-BRANCH = os.environ.get('BRANCH_NAME')
-SHA = os.environ.get('COMMIT_SHA')
-
-def print_tree(path, prefix="", is_last=True):
-    if os.path.isdir(path):
-        # 숨김 폴더 제외
-        if os.path.basename(path).startswith('.'):
-            return
-        # 최상위 폴더
-        if prefix == "":
-            print(f"{prefix}📦 {os.path.basename(path)}")
+def print_tree(path, prefix=""):
+    """
+    주어진 경로의 폴더 및 파일 구조를 출력합니다.
+    """
+    contents = os.listdir(path)
+    for i, item in enumerate(contents):
+        item_path = os.path.join(path, item)
+        if os.path.isdir(item_path):
+            if i == len(contents) - 1:
+                print(f"{prefix} ┗ 📂 {item}")
+                print_tree(item_path, f"{prefix}   ")
+            else:
+                print(f"{prefix} ┣ 📂 {item}")
+                print_tree(item_path, f"{prefix} ┃ ")
         else:
-            # 폴더
-            print(f"{prefix}{' ┗ ' if is_last else ' ┣ '}📂 {os.path.basename(path)}")
-        prefix += "   " if is_last else " ┃ "
-        items = os.listdir(path)
-        items.sort()  # 정렬하여 출력
-        for index, item in enumerate(items):
-            print_tree(os.path.join(path, item), prefix, index == len(items) - 1)
-    else:
-        # 숨김 파일 제외
-        if os.path.basename(path).startswith('.'):
-            return
-        # 파일
-        print(f"{prefix}📜 {os.path.basename(path)}")
+            if i == len(contents) - 1:
+                print(f"{prefix} ┗ 📜 {item}")
+            else:
+                print(f"{prefix} ┣ 📜 {item}")
 
 
 def print_changes(repo_path, commit_hash):
+    """
+    git 기준 파일의 상태를 출력합니다.
+    """
     repo = Repo(repo_path)
     commit = repo.commit(commit_hash)
     
@@ -54,20 +46,20 @@ def print_changes(repo_path, commit_hash):
             print(f"✅ {changed_file} (추가)")
 
 def handle_remove_readonly(func, path, excinfo):
-    # 파일 권한을 변경하여 읽기 전용을 해제하고 다시 시도
+    """
+    파일 권한을 변경하여 읽기 전용을 해제하고 다시 시도
+    """
     os.chmod(path, stat.S_IWRITE)
     func(path)  # 삭제를 다시 시도
 
 if __name__ == "__main__":
-    # .env 파일 로드
-    dotenv.load_dotenv()
-
-    # 환경 변수에서 값 가져오기
+    dotenv.load_dotenv() # .env 파일 로드
     URL = os.environ.get('REPO_URL')
     BRANCH = os.environ.get('BRANCH_NAME')
     SHA = os.environ.get('COMMIT_SHA')
 
-    parent_dir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
+    # 현재 스크립트의 상위 폴더 경로
+    parent_dir = os.path.abspath(os.path.join(__file__,os.pardir,os.pardir,os.pardir))
     folder_name = 'Checking_folder'
     folder_path = os.path.join(parent_dir, folder_name)
 
@@ -78,18 +70,12 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"폴더 삭제 중 오류 발생: {e}")
 
-    # 디렉토리 존재 여부 확인
-    if os.path.exists(folder_path):
+    if os.path.exists(folder_path): # 디렉토리 존재 여부 확인
         print("오류: 'Checking_folder'가 여전히 존재합니다. 수동으로 삭제하십시오.")
-    else:
-        # 리포지토리 클론 및 작업
+    else: # 리포지토리 클론 및 작업
         try:
             repo = Repo.clone_from(URL, folder_path)  # 상위 디렉토리에 클론할 디렉토리
             repo.git.checkout(BRANCH)  # 브랜치 전환
             print_changes(folder_path, SHA)  # 변경 내역 출력
         except Exception as e:
             print(f"오류 발생: {e}")
-
-    # 불러온 Checking_folder 디렉토리 삭제
-    if os.path.exists(folder_path):
-        shutil.rmtree(folder_path, onerror=handle_remove_readonly)
