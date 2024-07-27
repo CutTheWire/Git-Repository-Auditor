@@ -52,8 +52,8 @@ def print_commit_graph(commit_graph):
             else:
                 print(f"│  {sha}")
         
-        print(f"| 메시지: {commit_info['message']} | 작성자: {commit_info['author']} | 날짜: {commit_info['date']}")
-        print()
+        # print(f"| 메시지: {commit_info['message']} | 작성자: {commit_info['author']} | 날짜: {commit_info['date']}")
+        # print()
 
 if __name__ == "__main__":
     dotenv.load_dotenv()  # .env 파일 로드

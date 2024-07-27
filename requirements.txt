@@ -2,3 +2,7 @@ gitpython
 python-dotenv
 psutil
 requests
+networkx
+matplotlib
+bs4
+pyvis
