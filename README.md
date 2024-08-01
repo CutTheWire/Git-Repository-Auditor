@@ -49,6 +49,21 @@ source .venv/bin/activate
 ```
 
 ### 4. .env 설정
+위치 : ./git_state/.env
+```env
+REPO_URL= github repository url
+GITHUB_TOKEN= github account token
+BRANCH_NAME= your branch
+COMMIT_SHA= your commit SHA
+```
+
+### 5. 사용법
+- ./start/directory.bat 
+
+    ./git_state/git_directory_state.py를 실행시키는 파일로 파일 삭제를 위해 ./git_state/remove_folder.py를 사용, 따라서 bat파일로 실행.
+    ```powershell
+    & ./start/directory.bat
+    ```
 
 
 이제 프로젝트를 사용할 준비가 되었습니다. 즐겁게 사용하세요!

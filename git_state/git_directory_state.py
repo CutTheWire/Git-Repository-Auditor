@@ -1,81 +1,99 @@
 import os
 import dotenv
-import shutil
-import stat
 from git import Repo
+from typing import List
 
-def print_tree(path, prefix=""):
-    """
-    주어진 경로의 폴더 및 파일 구조를 출력합니다.
-    """
-    contents = os.listdir(path)
-    for i, item in enumerate(contents):
-        item_path = os.path.join(path, item)
-        if os.path.isdir(item_path):
-            if i == len(contents) - 1:
-                print(f"{prefix} ┗ 📂 {item}")
-                print_tree(item_path, f"{prefix}   ")
-            else:
-                print(f"{prefix} ┣ 📂 {item}")
-                print_tree(item_path, f"{prefix} ┃ ")
-        else:
-            if i == len(contents) - 1:
-                print(f"{prefix} ┗ 📜 {item}")
-            else:
-                print(f"{prefix} ┣ 📜 {item}")
+class DirectoryAnalyzer:
+    def __init__(self, path: str):
+        self.path = path
+        self.tree_lines = []
+        self.changes = []
 
+    def process_item(self, item: str, is_last: bool, prefix: str, is_recording: bool):
+        icon = "📂" if os.path.isdir(os.path.join(self.path, item)) else "📜"
+        connector = "┗" if is_last else "┣"
+        line = f"{prefix} {connector} {icon} {item}"
+        if is_recording:
+            self.tree_lines.append(line)
 
-def print_changes(repo_path, commit_hash):
-    """
-    git 기준 파일의 상태를 출력합니다.
-    """
-    repo = Repo(repo_path)
-    commit = repo.commit(commit_hash)
-    
-    # 디렉토리 구조 출력
-    print_tree(repo_path)
-    print()
-    
-    # 변경된 파일 출력
-    for changed_file in commit.stats.files:
-        if commit.stats.files[changed_file]['deletions'] > 0 and commit.stats.files[changed_file]['insertions'] > 0:
-            print(f"🔄 {changed_file} (수정)")
-        elif commit.stats.files[changed_file]['deletions'] > 0:
-            print(f"❌ {changed_file} (삭제)")
-        elif commit.stats.files[changed_file]['insertions'] > 0:
-            print(f"✅ {changed_file} (추가)")
+        return "  " if is_last else " ┃ "
 
-def handle_remove_readonly(func, path, excinfo):
-    """
-    파일 권한을 변경하여 읽기 전용을 해제하고 다시 시도
-    """
-    os.chmod(path, stat.S_IWRITE)
-    func(path)  # 삭제를 다시 시도
+    def directory_tree(self, sub_path: str = "", prefix: str = "", is_recording: bool = False) -> list:
+        contents = os.listdir(os.path.join(self.path, sub_path))
+        
+        for i, item in enumerate(contents):
+            is_last = i == len(contents) - 1
+            new_prefix = self.process_item(item, is_last, prefix, is_recording)
+            
+            full_path = os.path.join(self.path, sub_path, item)
+            if os.path.isdir(full_path):
+                self.directory_tree(os.path.join(sub_path, item), prefix + new_prefix, is_recording)
+
+        return self.tree_lines
+
+    def changes_state(self, commit_hash: str) -> list:
+        repo = Repo(self.path)
+        commit = repo.commit(commit_hash)
+
+        for changed_file, stats in commit.stats.files.items():
+            if stats['deletions'] > 0 and stats['insertions'] > 0:
+                self.changes.append(f"🔄 {changed_file} (수정)")
+            elif stats['deletions'] > 0:
+                self.changes.append(f"❌ {changed_file} (삭제)")
+            elif stats['insertions'] > 0:
+                self.changes.append(f"✅ {changed_file} (추가)")
+
+        return self.changes
+
+    def save_to_md(self, repo_name: str) -> None:
+        """
+        트리 구조와 변경 사항을 markdown 파일로 저장합니다.
+        """
+        # Template 폴더에 markdown 파일로 저장
+        template_folder = os.path.join('./Template')
+        os.makedirs(template_folder, exist_ok=True)
+        md_file_path = os.path.join(template_folder, 'changes.md')
+
+        with open(md_file_path, 'w', encoding='utf-8') as f:
+            f.write("# Git state\n\n")
+            f.write("- 디렉토리 구조\n\n")
+            f.write("```\n")
+            f.write(f"📦{repo_name}\n")
+            f.write("\n".join(self.tree_lines))
+            f.write("\n")
+            f.write("```\n\n")
+
+            
+            f.write("- 변경 사항\n\n")
+            f.write("```\n")
+            for change in self.changes:
+                f.write(f"{change}\n")
+            f.write("```\n\n")
 
 if __name__ == "__main__":
-    dotenv.load_dotenv() # .env 파일 로드
+    dotenv.load_dotenv()  # .env 파일 로드
     URL = os.environ.get('REPO_URL')
     BRANCH = os.environ.get('BRANCH_NAME')
     SHA = os.environ.get('COMMIT_SHA')
-
+    path_parts = URL.strip("/").split("/")
+    repo_name = path_parts[4].replace('.git', '')  # 리포지토리 이름 (확장자 제거)
+    
     # 현재 스크립트의 상위 폴더 경로
-    parent_dir = os.path.abspath(os.path.join(__file__,os.pardir,os.pardir,os.pardir))
+    parent_dir = os.path.abspath(os.path.join(__file__, os.pardir, os.pardir, os.pardir))
     folder_name = 'Checking_folder'
     folder_path = os.path.join(parent_dir, folder_name)
 
-    # 기존 폴더 삭제
-    if os.path.exists(folder_path):
-        try:
-            shutil.rmtree(folder_path, onerror=handle_remove_readonly)
-        except Exception as e:
-            print(f"폴더 삭제 중 오류 발생: {e}")
-
-    if os.path.exists(folder_path): # 디렉토리 존재 여부 확인
+    if os.path.exists(folder_path):  # 디렉토리 존재 여부 확인
         print("오류: 'Checking_folder'가 여전히 존재합니다. 수동으로 삭제하십시오.")
-    else: # 리포지토리 클론 및 작업
+    else:  # 리포지토리 클론 및 작업
         try:
             repo = Repo.clone_from(URL, folder_path)  # 상위 디렉토리에 클론할 디렉토리
             repo.git.checkout(BRANCH)  # 브랜치 전환
-            print_changes(folder_path, SHA)  # 변경 내역 출력
+            
+            DA = DirectoryAnalyzer(folder_path)  # DirectoryAnalyzer 인스턴스 생성
+            tree_lines = DA.directory_tree(is_recording=True)
+            changes = DA.changes_state(SHA)
+            DA.save_to_md(repo_name)
         except Exception as e:
             print(f"오류 발생: {e}")
+
